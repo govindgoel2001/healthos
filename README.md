@@ -34,39 +34,37 @@ infra               docker-compose, Dockerfiles, Caddy
 
 ## Setup
 
-```bash
-cp .env.example .env          # ANTHROPIC_API_KEY, GARMIN_*, TELEGRAM_* …
-docker compose -f infra/docker-compose.yml up -d --build
-```
-
-Then, once the containers are up:
+A `Makefile` wraps the whole deploy:
 
 ```bash
-# 1. Apply the database schema
-docker compose -f infra/docker-compose.yml exec bot pnpm db:migrate
-
-# 2. One-time Garmin auth — interactive, asks for email/password/MFA.
-#    Tokens persist ~6 months in the meteor-garmin-tokens volume.
-docker compose -f infra/docker-compose.yml exec bot \
-  uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp garmin-mcp-auth
+make deploy     # creates .env on first run — fill in keys, then re-run
+                # then: builds images, starts the stack, applies the schema
+make auth       # one-time interactive Garmin login (email/password/MFA);
+                # tokens persist ~6 months in the meteor-garmin-tokens volume
 ```
 
 That's it — the bot is live on Telegram and the morning job is scheduled.
 
+The raw equivalent, if you'd rather not use `make`:
+
+```bash
+cp .env.example .env          # ANTHROPIC_API_KEY, GARMIN_*, TELEGRAM_* …
+docker compose -f infra/docker-compose.yml up -d --build
+docker compose -f infra/docker-compose.yml exec bot pnpm db:migrate
+docker compose -f infra/docker-compose.yml exec bot \
+  uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp garmin-mcp-auth
+```
+
 ## Verify
 
 ```bash
-# List the tools garmin-mcp exposes + a sample day of metrics
-docker compose -f infra/docker-compose.yml exec bot pnpm verify:mcp -- 2026-05-22
-
-# Run the daily reasoning loop once and print the JSON result
-docker compose -f infra/docker-compose.yml exec bot pnpm reason -- 2026-05-22
-
-# Run the full morning job now (reasoning + freshness gate + Telegram brief)
-docker compose -f infra/docker-compose.yml exec bot pnpm --filter @meteor/bot brief
-
-# Telegram: send /brief to the bot, or just message it a question.
+make verify           # list garmin-mcp tools + a sample day of metrics
+make reason           # run the daily reasoning loop, print JSON (DATE=YYYY-MM-DD)
+make brief            # run the full morning job now + send the Telegram brief
+make logs / make ps   # tail logs / show container status
 ```
+
+On Telegram: send `/brief` to the bot, or just message it a question.
 
 The dashboard is served by Caddy at `PUBLIC_BASE_URL` (point `infra/Caddyfile`
 at your domain first), or directly from the `web` container on port 3000.
