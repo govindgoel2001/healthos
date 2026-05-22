@@ -1,0 +1,22 @@
+{
+  "name": "@meteor/bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "tsx src/index.ts",
+    "brief": "tsx src/run-brief.ts"
+  },
+  "dependencies": {
+    "@meteor/agent": "workspace:*",
+    "@meteor/db": "workspace:*",
+    "@meteor/mcp-client": "workspace:*",
+    "@meteor/shared": "workspace:*",
+    "grammy": "^1.32.0",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "@types/node-cron": "^3.0.11"
+  }
+}

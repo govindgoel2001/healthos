@@ -11,62 +11,81 @@ dashboard.
 ## Layout
 
 ```
-apps/web      Next.js 14 dashboard            (Phase 3)
-apps/bot      grammY Telegram bot             (Phase 2)
-packages/agent      Hermes — runDailyReasoning
-packages/mcp-client Garmin MCP wrapper + provider interface
-packages/db         Postgres schema (Drizzle)
-packages/shared     Types, voice rules, formatMetric, ☾
-infra         docker-compose, Caddy, cron
+apps/web            Next.js 14 dashboard (today / trends / workouts / memory / review)
+apps/bot            grammY Telegram bot + the 06:30 morning job
+packages/agent      Hermes — runDailyReasoning, freshness gate, ask
+packages/mcp-client Garmin MCP wrapper + HealthProvider interface
+packages/db         Postgres schema + queries (Drizzle)
+packages/shared     Types, voice rules, formatMetric, brief composer, ☾
+infra               docker-compose, Dockerfiles, Caddy
 ```
+
+## How it runs
+
+- **06:30 daily** the bot worker runs the *freshness gate* — it polls Garmin
+  Connect until last night's sleep has synced (the watch→phone→cloud lag),
+  then runs `runDailyReasoning`, then sends the Telegram brief. If the sync
+  window expires it nudges you to open Garmin Connect.
+- `runDailyReasoning` pulls 7/30/90-day context, loads confirmed agent
+  memories as priors, asks Claude (`claude-sonnet-4-6`) for today's plan, and
+  writes `daily_snapshots`, `plans`, `activities`, and proposed memories.
+- The dashboard reads only from Postgres. Replies to the bot and the
+  ask-anything input both route to the agent's `answerQuestion`.
 
 ## Setup
 
 ```bash
+cp .env.example .env          # ANTHROPIC_API_KEY, GARMIN_*, TELEGRAM_* …
+docker compose -f infra/docker-compose.yml up -d --build
+```
+
+Then, once the containers are up:
+
+```bash
+# 1. Apply the database schema
+docker compose -f infra/docker-compose.yml exec bot pnpm db:migrate
+
+# 2. One-time Garmin auth — interactive, asks for email/password/MFA.
+#    Tokens persist ~6 months in the meteor-garmin-tokens volume.
+docker compose -f infra/docker-compose.yml exec bot \
+  uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp garmin-mcp-auth
+```
+
+That's it — the bot is live on Telegram and the morning job is scheduled.
+
+## Verify
+
+```bash
+# List the tools garmin-mcp exposes + a sample day of metrics
+docker compose -f infra/docker-compose.yml exec bot pnpm verify:mcp -- 2026-05-22
+
+# Run the daily reasoning loop once and print the JSON result
+docker compose -f infra/docker-compose.yml exec bot pnpm reason -- 2026-05-22
+
+# Run the full morning job now (reasoning + freshness gate + Telegram brief)
+docker compose -f infra/docker-compose.yml exec bot pnpm --filter @meteor/bot brief
+
+# Telegram: send /brief to the bot, or just message it a question.
+```
+
+The dashboard is served by Caddy at `PUBLIC_BASE_URL` (point `infra/Caddyfile`
+at your domain first), or directly from the `web` container on port 3000.
+
+## Notes
+
+- `garmin-mcp` exposes 110+ tools; the names in `packages/mcp-client/src/provider.ts`
+  (`GARMIN_TOOLS`) are best-effort. `pnpm verify:mcp` prints the live list — if
+  any differ, correct that map.
+- The morning job's cron expression is `MORNING_CRON` (default `30 6 * * *`).
+- No `export.xml` — Garmin is a live cloud API. Readiness is Garmin's native
+  Training Readiness, passed through unchanged.
+
+## Local development (without Docker)
+
+```bash
 pnpm install
-cp .env.example .env          # fill in ANTHROPIC_API_KEY, Garmin, Telegram
+pnpm db:migrate                      # needs DATABASE_URL + a running Postgres
+GARMIN_MCP_TRANSPORT=stdio pnpm reason -- 2026-05-22
+pnpm --filter @meteor/web dev        # dashboard on :3000
+pnpm --filter @meteor/bot start      # bot worker
 ```
-
-### One-time Garmin auth
-
-`garmin_mcp` needs OAuth tokens (MFA-safe, last ~6 months). Run the
-interactive auth once and point the token volume at the result:
-
-```bash
-uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp garmin-mcp-auth
-# tokens are written to ~/.garminconnect — mount that into the agent container
-```
-
-### Database
-
-```bash
-docker compose -f infra/docker-compose.yml up -d postgres
-pnpm db:generate        # generate the SQL migration from the Drizzle schema
-pnpm db:migrate         # apply it
-```
-
-## Phase 1 — verify
-
-```bash
-# List the tools garmin-mcp exposes + a sample day of metrics.
-pnpm verify:mcp -- 2026-05-22
-
-# Run the daily reasoning loop and print the JSON result.
-pnpm reason -- 2026-05-22
-
-# Exercise the freshness gate (polls Garmin until last night's data syncs).
-pnpm reason -- 2026-05-22 --wait
-```
-
-`runDailyReasoning(date)` pulls 7/30/90-day Garmin context, loads confirmed
-agent memories as priors, asks Claude (`claude-sonnet-4-6`) for today's plan,
-and writes `daily_snapshots`, `plans`, and any proposed memories (as `pending`).
-
-## Full stack
-
-```bash
-docker compose -f infra/docker-compose.yml up -d
-```
-
-Phases 2–4 (Telegram bot, dashboard, cron + Caddy) are scaffolded but not yet
-implemented — see `infra/docker-compose.yml` for the commented services.

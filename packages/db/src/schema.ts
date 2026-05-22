@@ -55,6 +55,19 @@ export const plans = pgTable("plans", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+/** Workouts pulled from Garmin, persisted by the daily job for the dashboard. */
+export const activities = pgTable("activities", {
+  id: text("id").primaryKey(),
+  date: date("date").notNull(),
+  type: text("type").notNull(),
+  name: text("name").notNull(),
+  durationMinutes: integer("duration_minutes").notNull(),
+  distanceMeters: real("distance_meters"),
+  averageHr: integer("average_hr"),
+  rawJson: jsonb("raw_json"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const chatRole = pgEnum("chat_role", ["user", "assistant"]);
 
 /** Backs the dashboard ask-anything input and Telegram reply threads. */
@@ -69,3 +82,4 @@ export type DailySnapshotRow = typeof dailySnapshots.$inferSelect;
 export type AgentMemoryRow = typeof agentMemory.$inferSelect;
 export type PlanRow = typeof plans.$inferSelect;
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
+export type ActivityRow = typeof activities.$inferSelect;

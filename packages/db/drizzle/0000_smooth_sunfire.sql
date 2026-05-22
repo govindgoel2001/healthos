@@ -1,6 +1,18 @@
 CREATE TYPE "public"."chat_role" AS ENUM('user', 'assistant');--> statement-breakpoint
 CREATE TYPE "public"."memory_source" AS ENUM('derived', 'user');--> statement-breakpoint
 CREATE TYPE "public"."memory_status" AS ENUM('pending', 'confirmed', 'dismissed');--> statement-breakpoint
+CREATE TABLE "activities" (
+	"id" text PRIMARY KEY NOT NULL,
+	"date" date NOT NULL,
+	"type" text NOT NULL,
+	"name" text NOT NULL,
+	"duration_minutes" integer NOT NULL,
+	"distance_meters" real,
+	"average_hr" integer,
+	"raw_json" jsonb,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "agent_memory" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"fact" text NOT NULL,

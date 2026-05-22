@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  background: #0a0a0c;
+  color: #e8e8ea;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numerics are always monospace — a Meteor Health voice rule. */
+.num {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.015);
+  }
+}
+
+@keyframes softpulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(205, 214, 244, 0.12);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(205, 214, 244, 0);
+  }
+}

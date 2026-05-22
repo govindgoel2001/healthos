@@ -1,4 +1,4 @@
-import { db, dailySnapshots, plans } from "@meteor/db";
+import { db, dailySnapshots, plans, upsertActivities } from "@meteor/db";
 import { GarminProvider, enumerateDates } from "@meteor/mcp-client";
 import type { AgentMemory, IsoDate, ReasoningResult } from "@meteor/shared";
 import { reasonWithClaude } from "./anthropic.js";
@@ -75,6 +75,7 @@ export async function runDailyReasoning(
 
     await persistSnapshot(date, today, result);
     await persistPlan(date, result);
+    await persistActivities(garmin, date);
     const persistedMemories = await persistProposedMemories(result.newMemories);
 
     return { date, ...result, persistedMemories };
@@ -106,6 +107,26 @@ async function persistSnapshot(
     .insert(dailySnapshots)
     .values(values)
     .onConflictDoUpdate({ target: dailySnapshots.date, set: values });
+}
+
+/** Pulls the last 3 days of workouts from Garmin and upserts them. */
+async function persistActivities(
+  garmin: GarminProvider,
+  date: IsoDate,
+): Promise<void> {
+  const activities = await garmin.getActivities(shiftDate(date, -2), date);
+  await upsertActivities(
+    activities.map((a) => ({
+      id: a.id,
+      date: a.date,
+      type: a.type,
+      name: a.name,
+      durationMinutes: a.durationMinutes,
+      distanceMeters: a.distanceMeters,
+      averageHr: a.averageHr,
+      rawJson: a as object,
+    })),
+  );
 }
 
 async function persistPlan(date: IsoDate, result: ReasoningResult): Promise<void> {

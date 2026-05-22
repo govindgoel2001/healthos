@@ -7,3 +7,4 @@ export {
   loadDismissedMemories,
   persistProposedMemories,
 } from "./memory.js";
+export { answerQuestion } from "./answer.js";

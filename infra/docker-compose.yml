@@ -1,6 +1,11 @@
 # Meteor Health — full stack on a single VPS.
-# Phase 1 brings up postgres + agent. The bot and web services land in
-# Phases 2-3; they are defined here but commented until those apps exist.
+#
+#   docker compose -f infra/docker-compose.yml up -d --build
+#
+# First run, after the containers are up:
+#   docker compose -f infra/docker-compose.yml exec bot pnpm db:migrate
+#   docker compose -f infra/docker-compose.yml exec bot \
+#     uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp garmin-mcp-auth
 services:
   postgres:
     image: postgres:16-alpine
@@ -16,10 +21,12 @@ services:
       timeout: 5s
       retries: 10
 
-  agent:
+  # Telegram bot + 06:30 morning job. Also the place to run db:migrate and
+  # the reason / verify:mcp CLIs via `docker compose exec bot …`.
+  bot:
     build:
       context: ..
-      dockerfile: infra/agent.Dockerfile
+      dockerfile: infra/bot.Dockerfile
     env_file: ../.env
     environment:
       DATABASE_URL: postgres://meteor:meteor@postgres:5432/meteor
@@ -30,29 +37,33 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
 
-  # --- Phase 2 ---
-  # bot:
-  #   build: { context: .., dockerfile: infra/bot.Dockerfile }
-  #   env_file: ../.env
-  #   depends_on: [postgres, agent]
+  web:
+    build:
+      context: ..
+      dockerfile: infra/web.Dockerfile
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgres://meteor:meteor@postgres:5432/meteor
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
-  # --- Phase 3 ---
-  # web:
-  #   build: { context: .., dockerfile: infra/web.Dockerfile }
-  #   env_file: ../.env
-  #   ports: ["3000:3000"]
-  #   depends_on: [postgres]
-  #
-  # caddy:
-  #   image: caddy:2-alpine
-  #   ports: ["80:80", "443:443"]
-  #   volumes:
-  #     - ./Caddyfile:/etc/caddy/Caddyfile
-  #     - meteor-caddy:/data
-  #   depends_on: [web]
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - meteor-caddy:/data
+    depends_on:
+      - web
+    restart: unless-stopped
 
 volumes:
   meteor-pgdata:
   meteor-garmin-tokens:
-  # meteor-caddy:
+  meteor-caddy:
