@@ -1,0 +1,21 @@
+{
+  "name": "@meteor/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "reason": "tsx src/reason.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@meteor/db": "workspace:*",
+    "@meteor/mcp-client": "workspace:*",
+    "@meteor/shared": "workspace:*",
+    "drizzle-orm": "^0.38.3"
+  }
+}

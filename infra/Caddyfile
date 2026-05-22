@@ -1,0 +1,8 @@
+# Public surface — the dashboard only. Single-user, so the edge does auth.
+health.usemeteorify.com {
+	reverse_proxy web:3000
+	# Uncomment to gate the dashboard behind HTTP basic auth.
+	# basicauth {
+	# 	meteor JDJhJDE0... # `caddy hash-password` output
+	# }
+}
