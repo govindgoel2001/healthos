@@ -1,6 +1,18 @@
-import { db, dailySnapshots, plans, upsertActivities } from "@meteor/db";
-import { GarminProvider, enumerateDates } from "@meteor/mcp-client";
-import type { AgentMemory, IsoDate, ReasoningResult } from "@meteor/shared";
+import {
+  db,
+  dailySnapshots,
+  getSnapshotsBetween,
+  plans,
+  upsertActivities,
+  type DailySnapshotRow,
+} from "@meteor/db";
+import { GarminProvider } from "@meteor/mcp-client";
+import type {
+  AgentMemory,
+  DailyMetrics,
+  IsoDate,
+  ReasoningResult,
+} from "@meteor/shared";
 import { reasonWithClaude } from "./anthropic.js";
 import { waitForFreshData } from "./freshness.js";
 import {
@@ -28,6 +40,22 @@ function shiftDate(date: IsoDate, days: number): IsoDate {
   return d.toISOString().slice(0, 10);
 }
 
+/** Maps a persisted snapshot row back into the agent's DailyMetrics shape. */
+function snapshotToMetrics(row: DailySnapshotRow): DailyMetrics {
+  return {
+    date: row.date,
+    readiness: row.readiness,
+    bodyBattery: row.bodyBattery,
+    hrv: row.hrv,
+    rhr: row.rhr,
+    sleepMinutes: row.sleepMinutes,
+    sleepScore: row.sleepScore,
+    strain: row.strain,
+    steps: row.steps,
+    raw: row.rawJson,
+  };
+}
+
 /**
  * The daily reasoning loop. Pulls Garmin context, loads agent memory, asks
  * Claude for today's plan, and persists snapshot + plan + proposed memories.
@@ -49,23 +77,29 @@ export async function runDailyReasoning(
       }
     }
 
-    const [today, last7, last30, last90, trainingLoad, confirmed, dismissed] =
+    // Only today is fetched live from Garmin. Historical days come from the
+    // already-persisted daily_snapshots table — re-fetching 90 days from
+    // Garmin every run would rate-limit the cloud API.
+    const [today, history, trainingLoad, confirmed, dismissed] =
       await Promise.all([
         garmin.getDailyMetrics(date),
-        garmin.getMetricsRange(shiftDate(date, -6), date),
-        garmin.getMetricsRange(shiftDate(date, -29), date),
-        garmin.getMetricsRange(shiftDate(date, -89), date),
+        getSnapshotsBetween(shiftDate(date, -90), shiftDate(date, -1)),
         garmin.getTrainingLoad(date),
         loadConfirmedMemories(),
         loadDismissedMemories(),
       ]);
 
+    const series: DailyMetrics[] = [
+      ...history.map(snapshotToMetrics),
+      today,
+    ];
+
     const ctx: PromptContext = {
       date,
       today,
-      last7,
-      last30,
-      last90,
+      last7: series.slice(-7),
+      last30: series.slice(-30),
+      last90: series,
       trainingLoad,
       confirmed,
       dismissed,

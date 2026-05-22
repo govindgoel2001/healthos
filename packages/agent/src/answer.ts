@@ -46,6 +46,9 @@ Keep answers short. One or two sentences unless the question truly needs more.`;
     role: m.role as "user" | "assistant",
     content: m.content,
   }));
+  // The Anthropic API requires the first message to be from the user; drop
+  // any leading assistant turns the recent-chat window may start on.
+  while (priorTurns[0]?.role === "assistant") priorTurns.shift();
 
   const response = await anthropic.messages.create({
     model: MODEL,

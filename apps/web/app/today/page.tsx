@@ -38,8 +38,11 @@ export default async function TodayPage() {
 
   // Sparkline series, oldest → newest.
   const series = [...history].reverse();
+  // Drop null days before plotting — Number(null) is 0 and would distort the line.
   const pick = (k: keyof (typeof series)[number]) =>
-    series.map((s) => Number(s[k])).filter((n) => Number.isFinite(n));
+    series
+      .map((s) => s[k])
+      .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
 
   const briefMetrics = (s: typeof today): BriefMetrics => ({
     readiness: s.readiness,
